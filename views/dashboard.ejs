@@ -2740,15 +2740,16 @@ function generateReportData(students, attendanceData, startDate, endDate) {
         const absentPercent = totalDaysForStudent > 0 ? (absentDays / totalDaysForStudent * 100).toFixed(2) : "0.00";
 
         reportData.push({
-            name: student.name,
-            registerNo: student.registernumber, // FIXED: Changed from register_no
-            branch: student.branch,
-            totalDays: totalDaysForStudent,
-            presentDays: presentDays,
-            absentDays: absentDays,
-            presentPercent: presentPercent,
-            absentPercent: absentPercent
-        });
+    name: student.name,
+    registerNo: student.registernumber,
+    branch: student.branch,
+    academicYear: student.academicyear,
+    totalDays: totalDaysForStudent,
+    presentDays: presentDays,
+    absentDays: absentDays,
+    presentPercent: presentPercent,
+    absentPercent: absentPercent
+});
     });
 
     if (reportData.length > 0) {
@@ -2794,11 +2795,12 @@ function displayReport(reportData, startDate, endDate) {
         
         // Update table headers for today's report
         reportTableHeader.innerHTML = `
-            <th>Name</th>
-            <th>Register No</th>
-            <th>Branch</th>
-            <th>Status</th>
-        `;
+    <th>Name</th>
+    <th>Register No</th>
+    <th>Branch</th>
+    <th>Academic Year</th>
+    <th>Status</th>
+`;
         
         reportData.forEach(student => {
             const row = document.createElement('tr');
@@ -2806,13 +2808,29 @@ function displayReport(reportData, startDate, endDate) {
             const statusClass = student.presentDays > 0 ? 'present' : 'absent';
             
             row.innerHTML = `
-                <td>${student.name}</td>
-                <td>${student.registerNo}</td>
-                <td>${student.branch}</td>
-                <td><span class="status-badge ${statusClass}">${status}</span></td>
-            `;
+    <td>${student.name}</td>
+    <td>${student.registerNo}</td>
+    <td>${student.branch}</td>
+    <td>${student.academicYear}</td>
+    <td><span class="status-badge ${statusClass}">${status}</span></td>
+`;
             reportTableBody.appendChild(row);
         });
+        
+        // Add summary totals row
+        const summaryRow = document.createElement('tr');
+        summaryRow.style.fontWeight = '700';
+        summaryRow.style.background = '#f5f5f5';
+        summaryRow.style.borderTop = '3px solid #1976d2';
+        summaryRow.innerHTML = `
+            <td colspan="3" style="text-align: right; padding-right: 20px;">TOTAL:</td>
+            <td><strong>${reportData.length}</strong> Students</td>
+            <td>
+                <strong>${reportData.filter(s => s.presentDays > 0).length}</strong> Present | 
+                <strong>${reportData.filter(s => s.presentDays === 0).length}</strong> Absent
+            </td>
+        `;
+        reportTableBody.appendChild(summaryRow);
         
     } else {
         // Range report format
@@ -2842,28 +2860,48 @@ function displayReport(reportData, startDate, endDate) {
         
         // Ensure table headers are correct for range report
         reportTableHeader.innerHTML = `
-            <th>Name</th>
-            <th>Register No</th>
-            <th>Branch</th>
-            <th>Total Present Days</th>
-            <th>Total Absent Days</th>
-            <th>Present %</th>
-            <th>Absent %</th>
-        `;
+    <th>Name</th>
+    <th>Register No</th>
+    <th>Branch</th>
+    <th>Academic Year</th>
+    <th>Total Present Days</th>
+    <th>Total Absent Days</th>
+    <th>Present %</th>
+    <th>Absent %</th>
+`;
         
         reportData.forEach(student => {
             const row = document.createElement('tr');
             row.innerHTML = `
-                <td>${student.name}</td>
-                <td>${student.registerNo}</td>
-                <td>${student.branch}</td>
-                <td>${student.presentDays}</td>
-                <td>${student.absentDays}</td>
-                <td>${student.presentPercent}%</td>
-                <td>${student.absentPercent}%</td>
-            `;
+    <td>${student.name}</td>
+    <td>${student.registerNo}</td>
+    <td>${student.branch}</td>
+    <td>${student.academicYear}</td>
+    <td>${student.presentDays}</td>
+    <td>${student.absentDays}</td>
+    <td>${student.presentPercent}%</td>
+    <td>${student.absentPercent}%</td>
+`;
             reportTableBody.appendChild(row);
         });
+        
+        // Add summary totals row for range report
+        const totalPresent = reportData.reduce((sum, s) => sum + s.presentDays, 0);
+        const totalAbsent = reportData.reduce((sum, s) => sum + s.absentDays, 0);
+        const avgPresentPercent = (totalPresent / (totalPresent + totalAbsent) * 100).toFixed(2);
+        
+        const summaryRow = document.createElement('tr');
+        summaryRow.style.fontWeight = '700';
+        summaryRow.style.background = '#f5f5f5';
+        summaryRow.style.borderTop = '3px solid #1976d2';
+        summaryRow.innerHTML = `
+            <td colspan="3" style="text-align: right; padding-right: 20px;">TOTAL:</td>
+            <td><strong>${reportData.length}</strong> Students</td>
+            <td><strong>${totalPresent}</strong></td>
+            <td><strong>${totalAbsent}</strong></td>
+            <td colspan="2"><strong>${avgPresentPercent}%</strong> Average</td>
+        `;
+        reportTableBody.appendChild(summaryRow);
     }
     
     // Update table counts
@@ -2883,66 +2921,82 @@ function displayReport(reportData, startDate, endDate) {
 
         // Export report
         function exportReport(format) {
-            // Get report data
-            const reportTableBody = document.getElementById('reportTableBody');
-            const rows = reportTableBody.querySelectorAll('tr');
-            
-            if (rows.length === 0) {
-                alert('No data to export. Please generate a report first.');
-                return;
+    const reportTableBody = document.getElementById('reportTableBody');
+    const rows = reportTableBody.querySelectorAll('tr');
+    
+    if (rows.length === 0) {
+        alert('No data to export. Please generate a report first.');
+        return;
+    }
+    
+    // Get headers
+    const headers = [];
+    document.querySelectorAll('#reportTableHeader th').forEach(th => {
+        headers.push(th.textContent);
+    });
+    
+    // Get data (exclude summary row)
+    const data = [headers];
+    rows.forEach(row => {
+        // Skip summary row (check if it has fontWeight bold style)
+        if (row.style.fontWeight === '700') return;
+        
+        const rowData = [];
+        row.querySelectorAll('td').forEach(cell => {
+            // Clean text - remove HTML tags and extra spaces
+            let text = cell.textContent.replace(/Present|Absent|PRESENT|ABSENT/g, '').trim();
+            // Handle status badges
+            if (cell.querySelector('.status-badge')) {
+                text = cell.querySelector('.status-badge').textContent.trim();
             }
-            
-            // Get headers
-            const headers = [];
-            document.querySelectorAll('#reportTableHeader th').forEach(th => {
-                headers.push(th.textContent);
-            });
-            
-            // Get data
-            const data = [headers];
-            rows.forEach(row => {
-                const rowData = [];
-                row.querySelectorAll('td').forEach(cell => {
-                    // Remove HTML from status badges
-                    const text = cell.textContent.replace(/Present|Absent|Verified|Unverified/g, '').trim();
-                    rowData.push(text || cell.textContent);
-                });
-                data.push(rowData);
-            });
-            
-            // Create CSV or Excel content
-            let content, mimeType, fileName;
-            
-            if (format === 'csv') {
-                content = data.map(row => 
-                    row.map(cell => `"${cell}"`).join(',')
-                ).join('\n');
-                mimeType = 'text/csv';
-                fileName = `attendance_report_${new Date().toISOString().split('T')[0]}.csv`;
-            } else {
-                // For Excel, we would typically use a library like SheetJS
-                // This is a simplified version that creates a CSV with .xlsx extension
-                content = data.map(row => 
-                    row.map(cell => `"${cell}"`).join(',')
-                ).join('\n');
-                mimeType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
-                fileName = `attendance_report_${new Date().toISOString().split('T')[0]}.xlsx`;
-            }
-            
-            // Create and download file
-            const blob = new Blob([content], { type: mimeType });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = fileName;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
-            
-            closeExportModal();
-            alert(`Report exported successfully as ${format.toUpperCase()}!`);
+            rowData.push(text);
+        });
+        if (rowData.length > 0) {
+            data.push(rowData);
         }
+    });
+    
+    // Create CSV content with proper escaping
+    const csvContent = data.map(row => 
+        row.map(cell => {
+            // Escape quotes and wrap in quotes if contains comma
+            const cellStr = String(cell).replace(/"/g, '""');
+            return cellStr.includes(',') || cellStr.includes('\n') ? `"${cellStr}"` : cellStr;
+        }).join(',')
+    ).join('\n');
+    
+    // Set file details based on format
+    let mimeType, fileName, fileExtension;
+    
+    if (format === 'xlsx') {
+        // For Excel, use CSV with .csv extension (Excel opens CSV perfectly)
+        mimeType = 'text/csv;charset=utf-8;';
+        fileExtension = 'csv';
+        fileName = `attendance_report_${new Date().toISOString().split('T')[0]}.${fileExtension}`;
+    } else {
+        // For CSV
+        mimeType = 'text/csv;charset=utf-8;';
+        fileExtension = 'csv';
+        fileName = `attendance_report_${new Date().toISOString().split('T')[0]}.${fileExtension}`;
+    }
+    
+    // Add BOM for Excel UTF-8 support
+    const BOM = '\uFEFF';
+    const blob = new Blob([BOM + csvContent], { type: mimeType });
+    
+    // Download file
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    
+    closeExportModal();
+    alert(`Report exported successfully as ${format.toUpperCase()}!`);
+}
 
         // Modal functions
         function openVerificationModal(studentId) {
