@@ -596,8 +596,9 @@
         </div>
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+    
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/bcryptjs/2.4.3/bcrypt.min.js"></script>
 <script>
     // ============================================
     // SUPABASE CONFIGURATION
@@ -668,108 +669,86 @@
             document.body.classList.remove('error-state');
         }, 300);
 
-        // Auto-hide after 5 seconds
         setTimeout(() => {
             errorMessage.classList.remove('show');
         }, 5000);
     }
 
- // ============================================
-// LOGIN HANDLER - SUPABASE (IMPROVED)
-// ============================================
-document.getElementById('loginForm').addEventListener('submit', async function(e) {
-    e.preventDefault();
+    // ============================================
+    // LOGIN HANDLER - DIRECT DATABASE CHECK
+    // ============================================
+    document.getElementById('loginForm').addEventListener('submit', async function(e) {
+        e.preventDefault();
 
-    const email = document.getElementById('email').value.trim();
-    const password = document.getElementById('password').value;
-    const rememberMe = document.getElementById('remember').checked;
-    const loginBtn = document.querySelector('.login-btn');
+        const email = document.getElementById('email').value.trim();
+        const password = document.getElementById('password').value;
+        const rememberMe = document.getElementById('remember').checked;
+        const loginBtn = document.querySelector('.login-btn');
 
-    // Reset error state
-    errorMessage.classList.remove('show');
-    loginBtn.textContent = 'Logging in...';
-    loginBtn.disabled = true;
+        errorMessage.classList.remove('show');
+        loginBtn.textContent = 'Logging in...';
+        loginBtn.disabled = true;
 
-    try {
-        console.log('🔐 Attempting login for:', email);
+        try {
+            console.log('🔐 Attempting login for:', email);
 
-        // Sign in with Supabase Auth
-        const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
-            email: email,
-            password: password
-        });
+            // Get staff from database by email
+            const { data: staff, error } = await supabase
+                .from('staff')
+                .select('*')
+                .eq('email', email)
+                .single();
 
-        if (authError) throw authError;
+            if (error || !staff) {
+                throw new Error('Invalid email or password');
+            }
 
-        console.log('✅ Auth successful:', authData);
+            console.log('✅ Staff found:', staff.name);
 
-        // Store session data
-        if (authData.session) {
-            // Store the session in localStorage
-            localStorage.setItem('supabase_session', JSON.stringify(authData.session));
+            // Compare password with bcrypt
+            const isValidPassword = await bcrypt.compare(password, staff.password);
             
-            // Store remember me preference
+            if (!isValidPassword) {
+                throw new Error('Invalid email or password');
+            }
+
+            console.log('✅ Password valid');
+
+            // Store session in localStorage
+            const sessionData = {
+                staffId: staff.id,
+                staffIdNumber: staff.staff_id,
+                name: staff.name,
+                email: staff.email,
+                loginTime: new Date().toISOString()
+            };
+
+            localStorage.setItem('staff_session', JSON.stringify(sessionData));
+            
             if (rememberMe) {
                 localStorage.setItem('rememberEmail', email);
             } else {
                 localStorage.removeItem('rememberEmail');
             }
 
-            // Get teacher details
-            const { data: teacherData, error: teacherError } = await supabase
-                .from('teachers')
-                .select('*')
-                .eq('user_id', authData.user.id)
-                .single();
-
-            if (teacherError) {
-                console.error('❌ Teacher fetch error:', teacherError);
-                throw new Error('Could not fetch teacher details');
-            }
-
-            console.log('✅ Teacher data loaded:', teacherData.name);
-
-            // Store teacher info
-            localStorage.setItem('teacherName', teacherData.name);
-            localStorage.setItem('teacherId', teacherData.id);
-            localStorage.setItem('teacherEmail', email);
-            localStorage.setItem('lastLogin', new Date().toISOString());
-
-            console.log('✅ Login successful! Redirecting to dashboard...');
-
-            // Use replace instead of href to prevent back button issues
+            console.log('✅ Login successful! Redirecting...');
+            
+            // Redirect to dashboard
             window.location.replace('/dashboard');
 
-        } else {
-            throw new Error('No session created');
+        } catch (error) {
+            console.error('❌ Login error:', error);
+
+            let errorMsg = '❌ Invalid email or password!\n\n💡 Tip: If you don\'t have an account, please click "Register here" below.';
+
+            showError(errorMsg);
+            loginBtn.textContent = 'Login';
+            loginBtn.disabled = false;
         }
-
-    } catch (error) {
-        console.error('❌ Login error:', error);
-
-        let errorMsg = 'Login failed. Please try again.';
-        
-        if (error.message.includes('Invalid login credentials')) {
-            errorMsg = '❌ Invalid email or password!\n\n💡 Tip: If you don\'t have an account, please click "Register here" below to create one.';
-        } else if (error.message.includes('Email not confirmed')) {
-            errorMsg = '⚠️ Please confirm your email first!\n\nCheck your inbox for the confirmation link.';
-        } else if (error.message.includes('Too many requests')) {
-            errorMsg = '⏳ Too many login attempts. Please try again later.';
-        } else if (error.message.includes('session')) {
-            errorMsg = '❌ Failed to create login session.\n\nPlease try again or clear your browser cache.';
-        } else if (error.message) {
-            errorMsg = error.message;
-        }
-
-        showError(errorMsg);
-
-        loginBtn.textContent = 'Login';
-        loginBtn.disabled = false;
-    }
-});
+    });
 
     // ============================================
-    // REGISTRATION HANDLER - SUPABASE
+    // REGISTRATION HANDLER - DIRECT DATABASE INSERT
     // ============================================
     document.getElementById('registerForm').addEventListener('submit', async function(e) {
         e.preventDefault();
@@ -805,52 +784,32 @@ document.getElementById('loginForm').addEventListener('submit', async function(e
         try {
             console.log('📝 Attempting registration for:', email);
 
-            // Step 1: Create auth user in Supabase Auth
-            const { data: authData, error: authError } = await supabase.auth.signUp({
-                email: email,
-                password: password,
-                options: {
-                    data: {
-                        full_name: name,
-                        staff_id: staffId
-                    }
-                }
-            });
+            // Hash password with bcrypt
+            const hashedPassword = await bcrypt.hash(password, 10);
+            console.log('✅ Password hashed');
 
-            if (authError) throw authError;
-
-            console.log('✅ Auth user created');
-
-            // Wait for Supabase to process
-            await new Promise(resolve => setTimeout(resolve, 1000));
-
-            // Step 2: Save teacher details to teachers table
-            const { data: teacherData, error: teacherError } = await supabase
-                .from('teachers')
+            // Insert staff into database
+            const { data, error } = await supabase
+                .from('staff')
                 .insert([{
-                    user_id: authData.user.id,
                     staff_id: staffId,
                     name: name,
                     email: email,
+                    password: hashedPassword,
                     created_at: new Date().toISOString(),
                     updated_at: new Date().toISOString()
                 }])
                 .select()
                 .single();
 
-            if (teacherError) {
-                console.error('❌ Teacher insert error:', teacherError);
-                throw teacherError;
+            if (error) {
+                console.error('❌ Insert error:', error);
+                throw error;
             }
 
             console.log('✅ Registration successful!');
 
-            // Check if email confirmation is required
-            if (authData.user && !authData.session) {
-                alert('✅ Registration successful!\n\n📧 Please check your email to confirm your account before logging in.\n\n(Check spam folder if not in inbox)');
-            } else {
-                alert('✅ Registration successful!\n\n🎉 You can now login with your credentials.');
-            }
+            alert('✅ Registration successful!\n\n🎉 You can now login with your credentials.');
 
             // Close modal and fill in email
             registerModal.classList.remove('show');
@@ -862,16 +821,12 @@ document.getElementById('loginForm').addEventListener('submit', async function(e
 
             let errorMsg = '❌ Registration failed. ';
 
-            if (error.message.includes('duplicate') || error.message.includes('unique')) {
+            if (error.message.includes('duplicate') || error.code === '23505') {
                 errorMsg += 'This email or Staff ID already exists!\n\n💡 Try logging in instead.';
-            } else if (error.message.includes('invalid email')) {
-                errorMsg += 'Please enter a valid email address!';
-            } else if (error.message.includes('password')) {
-                errorMsg += 'Password is too weak. Use at least 6 characters.';
             } else if (error.message) {
                 errorMsg += error.message;
             } else {
-                errorMsg += 'Please try again or contact support.';
+                errorMsg += 'Please try again.';
             }
 
             alert(errorMsg);
@@ -886,76 +841,40 @@ document.getElementById('loginForm').addEventListener('submit', async function(e
     // LOAD REMEMBERED EMAIL
     // ============================================
     window.addEventListener('load', function() {
-        // Load remembered email
         const rememberedEmail = localStorage.getItem('rememberEmail');
         if (rememberedEmail) {
             document.getElementById('email').value = rememberedEmail;
             document.getElementById('remember').checked = true;
         }
-    });
 
-    // ============================================
-    // PASSWORD RESET (Forgot Password)
-    // ============================================
-    document.querySelector('.forgot-password').addEventListener('click', async (e) => {
-        e.preventDefault();
-        
-        const email = prompt('📧 Enter your email address for password reset:');
-        
-        if (!email) return;
-        
-        try {
-            const { error } = await supabase.auth.resetPasswordForEmail(email, {
-                redirectTo: window.location.origin + '/reset-password'
-            });
-            
-            if (error) throw error;
-            
-            alert('✅ Password reset email sent!\n\n📧 Please check your inbox.');
-            
-        } catch (error) {
-            console.error('Password reset error:', error);
-            alert('❌ Failed to send password reset email.\n\nPlease check your email address.');
-        }
-    });
-
-    // Check for existing valid session on login page load
-window.addEventListener('load', async function() {
-    // Load remembered email
-    const rememberedEmail = localStorage.getItem('rememberEmail');
-    if (rememberedEmail) {
-        document.getElementById('email').value = rememberedEmail;
-        document.getElementById('remember').checked = true;
-    }
-
-    // Check if user already has a valid session
-    try {
-        const session = localStorage.getItem('supabase_session');
-        const lastLogin = localStorage.getItem('lastLogin');
-        
-        if (session && lastLogin) {
-            const loginTime = new Date(lastLogin);
-            const currentTime = new Date();
-            const timeDiff = currentTime - loginTime;
-            
-            // If session is still valid (less than 12 hours), redirect to dashboard
-            if (timeDiff < (12 * 60 * 60 * 1000)) {
-                const sessionObj = JSON.parse(session);
-                const { data: { user }, error } = await supabase.auth.getUser(sessionObj.access_token);
+        // Check for existing session
+        const session = localStorage.getItem('staff_session');
+        if (session) {
+            try {
+                const sessionData = JSON.parse(session);
+                const loginTime = new Date(sessionData.loginTime);
+                const currentTime = new Date();
+                const timeDiff = currentTime - loginTime;
                 
-                if (user && !error) {
-                    console.log('✅ Existing valid session found, redirecting to dashboard');
+                // If session is still valid (less than 24 hours)
+                if (timeDiff < (24 * 60 * 60 * 1000)) {
+                    console.log('✅ Valid session found, redirecting...');
                     window.location.replace('/dashboard');
                     return;
                 }
+            } catch (error) {
+                console.log('No valid session');
             }
         }
-    } catch (error) {
-        console.log('No valid existing session');
-        // Continue with normal login page
-    }
-});
+    });
 
+    // ============================================
+    // PASSWORD RESET (Simple version)
+    // ============================================
+    document.querySelector('.forgot-password').addEventListener('click', async (e) => {
+        e.preventDefault();
+        alert('⚠️ Password reset feature coming soon!\n\nPlease contact your administrator for password reset.');
+    });
 </script>
 </body>
 </html>
