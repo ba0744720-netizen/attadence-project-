@@ -850,6 +850,9 @@ body::after {
     box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
     position: relative;
     overflow: hidden;
+    display: block;              /* ✅ ADD THIS */
+    text-decoration: none;       /* ✅ ADD THIS */
+    color: inherit;              /* ✅ ADD THIS */
 }
 
 .dashboard-action-card::before {
@@ -1830,25 +1833,26 @@ function setupNavigation() {
     });
     
     // Dashboard card navigation - WAIT for DOM to be ready
-    setTimeout(() => {
-        const dashboardCards = document.querySelectorAll('.dashboard-action-card');
-        console.log('Found dashboard cards:', dashboardCards.length); // Debug log
-        
-        dashboardCards.forEach(card => {
-            card.addEventListener('click', function() {
-                const pageId = this.getAttribute('data-page');
-                console.log('Dashboard card clicked:', pageId); // Debug log
-                navigateToPage(pageId);
-                
-                // Update active menu item
-                document.querySelectorAll('.menu-item').forEach(i => i.classList.remove('active'));
-                const menuItem = document.querySelector(`.menu-item[data-page="${pageId}"]`);
-                if (menuItem) {
-                    menuItem.classList.add('active');
-                }
-            });
+setTimeout(() => {
+    const dashboardCards = document.querySelectorAll('.dashboard-action-card');
+    console.log('Found dashboard cards:', dashboardCards.length); // Debug log
+    
+    dashboardCards.forEach(card => {
+        card.addEventListener('click', function(e) {  // ✅ ADD 'e' parameter
+            e.preventDefault();                        // ✅ ADD THIS LINE
+            const pageId = this.getAttribute('data-page');
+            console.log('Dashboard card clicked:', pageId); // Debug log
+            navigateToPage(pageId);
+            
+            // Update active menu item
+            document.querySelectorAll('.menu-item').forEach(i => i.classList.remove('active'));
+            const menuItem = document.querySelector(`.menu-item[data-page="${pageId}"]`);
+            if (menuItem) {
+                menuItem.classList.add('active');
+            }
         });
-    }, 100); // Small delay to ensure DOM is ready
+    });
+}, 100); // Small delay to ensure DOM is ready
 }
         
        // Navigate to page
