@@ -597,8 +597,9 @@
     </div>
 
     
+
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/bcryptjs/2.4.3/bcrypt.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
 <script>
     // ============================================
     // SUPABASE CONFIGURATION
@@ -607,6 +608,18 @@
     const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imlhb2xhZGlxZ2Z4amlpam5heHV5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjE5ODIzNTcsImV4cCI6MjA3NzU1ODM1N30.6A1_vyEgVOV9QbSwkmYXegcmq4SLPFukG5vbUJzyA5w';
     
     const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    // ============================================
+    // HELPER FUNCTIONS FOR PASSWORD HASHING
+    // ============================================
+    function hashPassword(password) {
+        return CryptoJS.SHA256(password).toString();
+    }
+
+    function verifyPassword(inputPassword, storedHash) {
+        const inputHash = hashPassword(inputPassword);
+        return inputHash === storedHash;
+    }
 
     // ============================================
     // DOM ELEMENTS
@@ -705,8 +718,8 @@
 
             console.log('✅ Staff found:', staff.name);
 
-            // Compare password with bcrypt
-            const isValidPassword = await bcrypt.compare(password, staff.password);
+            // Verify password
+            const isValidPassword = verifyPassword(password, staff.password);
             
             if (!isValidPassword) {
                 throw new Error('Invalid email or password');
@@ -784,8 +797,8 @@
         try {
             console.log('📝 Attempting registration for:', email);
 
-            // Hash password with bcrypt
-            const hashedPassword = await bcrypt.hash(password, 10);
+            // Hash password
+            const hashedPassword = hashPassword(password);
             console.log('✅ Password hashed');
 
             // Insert staff into database
